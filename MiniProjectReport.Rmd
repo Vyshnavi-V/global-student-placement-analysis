@@ -1,0 +1,451 @@
+---
+title: "Analyzing Factors Influencing Graduate Placement and Salaries Across Countries"
+author: |
+  Vyshnavi V  
+  Roll No: 2026emai20042
+output:
+  html_document:
+    toc: true
+    toc_depth: 3
+    number_sections: true
+date: "2026-10-26"
+---
+
+# Introduction
+
+Graduate placement is an important milestone in a student's career, and salary outcomes can vary depending on several factors, such as academic performance, university ranking, internship experience, skills, and specialization.
+This project explores these relationships using R, descriptive statistics, data visualization, and appropriate statistical methods.
+The aim is to understand the patterns in graduate placement and salary outcomes and identify the factors associated with them.
+
+# Objectives
+
+1. To identify the factors associated with graduate placement outcomes.
+2. To analyse the relationship between CGPA and salary.
+3. To compare placement rates across different university ranking bands.
+4. To examine placement rates and salary variations across countries and specializations.
+5. To build and evaluate a Logistic Regression model for predicting student placement status..
+
+# Dataset Description
+
+The dataset used for this project is the Global Student Placement & Salary Dataset, obtained from Kaggle. It contains information about students' academic performance, skills, internship experience, placement status, and salary outcomes across five countries: Canada, Germany, India, the UK, and the USA. The dataset consists of 10,000 observations (rows) and 13 variables (columns). It includes three types of variables: integer, numeric, and categorical. Integer variables include backlogs and internship count, while numeric variables include CGPA, aptitude score, communication score, internship quality score, and annual salary. The categorical variables include college tier, country, university ranking band, specialization, industry, and placement status. This dataset is used to analyse the factors associated with graduate placement and salary differences across countries.
+
+# Data Loading and Exploration
+
+## Loading the Dataset
+
+The dataset is imported into R using the `read.csv()` function.
+
+```{r load-data}
+data <- read.csv(
+  "D:/Mtech/S1/Data Science/Project/global_placement.csv",
+  stringsAsFactors = FALSE
+)
+
+# Display the first six records
+head(data)
+```
+
+## Dataset Dimensions
+
+The output shows the number of observations and variables in the dataset.
+
+```{r}
+dim(data)
+```
+
+## Column Names and Data Types
+
+```{r}
+names(data)
+
+```
+
+```{r}
+str(data)
+```
+
+## Summary
+
+Summary statistics provide an initial understanding of the numerical and categorical variables.
+
+```{r}
+summary(data)
+```
+
+# Data Cleaning and Preprocessing and EDA processes applied
+
+## Checking for Missing Values
+
+The is.na() function identifies missing values, and colSums() calculates the number of missing values in each column.
+
+```{r}
+# Count missing values in each column
+colSums(is.na(data))
+```
+
+The output shows that all 13 variables contain zero missing values. Therefore, no missing-value treatment is required for the dataset at this stage.
+
+## Check duplicate records
+
+```{r}
+# Count duplicate rows
+sum(duplicated(data))
+```
+
+The output is 0, which indicates that there are no duplicate records in the dataset. Therefore, no duplicate rows need to be removed.
+
+## Check unique values and data ranges
+
+```{r}
+# Check unique placement statuses
+unique(data$placement_status)
+unique(data$college_tier)
+unique(data$country)
+unique(data$specialization)
+unique(data$industry)
+```
+
+The unique() function identifies all distinct categories present in each categorical variable.
+
+```{r}
+# Check whether unplaced students have zero salary
+table(data$placement_status, data$salary == 0)
+```
+
+The table() function compares placement status with whether salary is zero. The output shows that all 3,847 Not Placed students have zero salary, while all 6,153 Placed students have a positive salary. This confirms that salary values are consistent with placement status, and zero salary should not be treated as missing data.
+
+```{r}
+# Convert categorical variables to factors
+data$college_tier <- as.factor(data$college_tier)
+data$country <- as.factor(data$country)
+data$university_ranking_band <- as.factor(data$university_ranking_band)
+data$specialization <- as.factor(data$specialization)
+data$industry <- as.factor(data$industry)
+data$placement_status <- as.factor(data$placement_status)
+```
+
+The as.factor() function converts categorical variables into factor variables in R. Here, college tier, country, university ranking band, specialization, industry, and placement status are converted into factors. This helps R recognize these variables as categories rather than ordinary text values, making them suitable for further statistical analysis and Logistic Regression modelling.
+
+# Exploratory Data Analysis (EDA)
+
+## Relationship between CGPA and Salary
+```{r}
+# Select only students who are placed
+placed_data <- subset(
+  data,
+  placement_status == "Placed"
+)
+```
+The subset() function is used to select only the students whose placement status is "Placed" from the original dataset. The selected records are stored in a new dataset called placed_data.
+
+```{r}
+# Check the number of rows
+nrow(placed_data)
+
+```
+```{r}
+# Display the first six records
+head(placed_data)
+```
+
+```{r}
+
+library(ggplot2)
+# Scatter Plot
+ggplot(placed_data, aes(x = cgpa, y = salary)) +
+  geom_point(alpha = 0.5) +
+  geom_smooth(method = "lm", se = TRUE) +
+  labs(
+    title = "Relationship Between CGPA and Salary",
+    x = "CGPA",
+    y = "Salary"
+  ) +
+  theme_minimal()
+```
+
+The scatter plot shows the relationship between CGPA and salary among placed students. The fitted regression line has a positive slope, indicating a positive association between CGPA and salary. However, the points are widely scattered, suggesting considerable variation in salary among students with similar CGPA values. Therefore, CGPA alone may not fully explain salary differences.
+
+## Salary Outlier Detection
+```{r}
+ggplot(placed_data, aes(y = salary)) +
+  geom_boxplot(staplewidth = 0.5) +
+  labs(
+    title = "Salary Distribution and Potential Outliers",
+    x = NULL,
+    y = "Salary"
+  ) +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_blank()
+  )
+```
+
+The box plot illustrates the distribution of salaries among placed students. The median salary is approximately 95,000. The middle 50% of salaries lie approximately between 74,000 and 111,000, indicating considerable variation in salary outcomes. The whiskers extend from approximately 25,000 to 120,000, and no individual outlier points are visibly displayed beyond the whiskers.
+
+## Placement Rate by  University Ranking Band
+```{r}
+
+library(dplyr)
+# Calculate placement rate by university ranking band
+ranking_placement <- data %>%
+  group_by(university_ranking_band) %>%
+  summarise(
+    Placement_Rate = mean(placement_status == "Placed") * 100
+  )
+
+# Create bar chart
+ggplot(
+  ranking_placement,
+  aes(x = university_ranking_band, y = Placement_Rate)
+) +
+  geom_bar(stat = "identity", fill = "steelblue") +
+  labs(
+    title = "Placement Rate by University Ranking Band",
+    x = "University Ranking Band",
+    y = "Placement Rate (%)"
+  ) +
+  theme_minimal()
+```
+
+We can observe that students from Top 100 universities have the highest placement rate, at approximately 72%. Interestingly, universities ranked between 100 and 300 have a higher placement rate than universities ranked 300 and above.This indicates that placement rates are generally higher among students from better-ranked universities in this dataset.Other student-related factors may also contribute to placement outcomes.
+
+```{r}
+## Correlation Heat Map
+
+# Select numerical variables
+numeric_data <- data[sapply(data, is.numeric)]
+
+# Calculate the correlation matrix
+cor_matrix <- cor(numeric_data, use = "complete.obs")
+
+# Convert the matrix into a data frame
+cor_df <- as.data.frame(as.table(cor_matrix))
+
+# Create the heat map
+ggplot(cor_df, aes(x = Var1, y = Var2, fill = Freq)) +
+  geom_tile(color = "white") +
+  geom_text(aes(label = round(Freq, 2)), size = 3) +
+  scale_fill_gradient2(
+    low = "blue",
+    mid = "white",
+    high = "red",
+    midpoint = 0,
+    limits = c(-1, 1)
+  ) +
+  labs(
+    title = "Correlation Heat Map of Numerical Variables",
+    x = "",
+    y = "",
+    fill = "Correlation"
+  ) +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1)
+  )
+```
+
+The correlation heat map shows the relationships between numerical variables. Red indicates positive correlation, while blue indicates negative correlation. We can observe that CGPA has a positive correlation with salary (0.33), while backlogs have a negative correlation (-0.34). Internship quality score (0.20) and internship count (0.18) also show positive correlations with salary. This suggests that CGPA, backlogs and internship-related factors have relatively stronger associations with salary than the other numerical variables.
+
+## Combined Analysis Using Facet Wrap
+
+```{r}
+
+
+# Calculate placement rate
+placement_specialization <- data %>%
+  group_by(country, specialization) %>%
+  summarise(
+    placement_rate =
+      mean(placement_status == "Placed") * 100,
+    .groups = "drop"
+  )
+
+# Calculate average salary among placed students
+salary_specialization <- placed_data %>%
+  group_by(country, specialization) %>%
+  summarise(
+    average_salary = mean(salary),
+    .groups = "drop"
+  )
+
+# Combine both results
+combined_analysis <- merge(
+  placement_specialization,
+  salary_specialization,
+  by = c("country", "specialization")
+)
+
+
+```
+
+```{r}
+
+ggplot(
+  combined_analysis,
+  aes(x = placement_rate, y = average_salary,
+      color = country)
+) +
+  geom_point(size = 3) +
+  facet_wrap(~ specialization) +
+  labs(
+    title = "Placement Rate vs Average Salary Across Countries and Specializations",
+    x = "Placement Rate (%)",
+    y = "Average Salary",
+    color = "Country"
+  ) +
+  theme_minimal()
+```
+
+From the graph, we can observe that the USA generally has the highest average salaries across the different specializations, while India has the lowest average salaries. However, India's placement rates are relatively high in some specializations despite its lower salary levels. The other countries also show variations in both placement rates and salaries across specializations.
+
+This indicates that a higher placement rate does not necessarily mean a higher average salary. Both outcomes vary across countries and specializations.
+
+```{r}
+# Overall placement rate
+overall_placement_rate <- mean(
+  data$placement_status == "Placed"
+) * 100
+
+# Mean salary among placed students
+mean_placed_salary <- mean(placed_data$salary)
+
+# Median salary among placed students
+median_placed_salary <- median(placed_data$salary)
+
+# Display results clearly
+cat("Overall Placement Rate:",
+    round(overall_placement_rate, 2), "%\n")
+
+cat("Mean Salary Among Placed Students:",
+    round(mean_placed_salary, 2), "\n")
+
+cat("Median Salary Among Placed Students:",
+    round(median_placed_salary, 2), "\n")
+
+
+```
+The overall placement rate is 61.53%, meaning 6,153 out of 10,000 students were placed. Among the placed students, the average salary is approximately 90,105.88, while the median salary is 94,524.17. These statistics provide an overall summary of placement performance and salary distribution in the dataset.
+
+# Logistic Regression
+Logistic Regression is a supervised machine learning algorithm used for classification problems. In this project, it is used to predict whether a student will be placed based on academic performance, college tier, country, university ranking, internship experience, aptitude, communication skills, specialization, industry, and internship quality.
+
+## Preparing the Data
+```{r}
+# Create a copy of the dataset
+ml_data <- data
+
+# Exclude salary to avoid data leakage
+ml_data$salary <- NULL
+
+# Set placement status as a categorical target
+ml_data$placement_status <- factor(
+  ml_data$placement_status,
+  levels = c("Not Placed", "Placed")
+)
+```
+## Splitting the Dataset
+The dataset is divided into training and testing sets. The training set is used to build the model, while the testing set evaluates its performance on unseen observations.
+```{r}
+set.seed(123)
+
+# Randomly select 80% of rows for training
+train_index <- sample(
+  seq_len(nrow(ml_data)),
+  size = floor(0.8 * nrow(ml_data))
+)
+
+train_data <- ml_data[train_index, ]
+test_data <- ml_data[-train_index, ]
+```
+
+```{r}
+# Check dataset sizes
+nrow(train_data)
+nrow(test_data)
+```
+
+## Building the Logistic Regression Model
+```{r}
+# Train the model
+placement_model <- glm(
+  placement_status ~ .,
+  data = train_data,
+  family = binomial()
+)
+
+# Display model summary
+summary(placement_model)
+
+
+```
+
+The glm() function builds a Logistic Regression model using the training data to predict placement status. The family = binomial() specifies binary classification, and summary() displays the model coefficients and statistical significance of the input variables.
+
+## Predicting Placement Status
+```{r}
+# Predict placement probabilities
+probability <- predict(
+  placement_model,
+  newdata = test_data,
+  type = "response"
+)
+
+# Convert probabilities into predicted classes
+predicted <- ifelse(
+  probability >= 0.5,
+  "Placed",
+  "Not Placed"
+)
+
+predicted <- factor(
+  predicted,
+  levels = c("Not Placed", "Placed")
+)
+
+# Create confusion matrix
+confusion_matrix <- table(
+  Actual = test_data$placement_status,
+  Predicted = predicted
+)
+
+confusion_matrix
+```
+The predict() function calculates placement probabilities for the 2,000 test records. Using a threshold of 0.5, students are classified as Placed or Not Placed. The table() function then creates a confusion matrix to compare the actual placement status with the model's predictions and identify correct and incorrect predictions.
+
+## Calculate accuracy
+```{r}
+accuracy <- sum(diag(confusion_matrix)) /
+  sum(confusion_matrix)
+
+cat("Model Accuracy:", round(accuracy * 100, 2), "%")
+```
+```{r}
+# Calculate evaluation metrics
+
+TP <- confusion_matrix["Placed", "Placed"]
+FP <- confusion_matrix["Not Placed", "Placed"]
+FN <- confusion_matrix["Placed", "Not Placed"]
+
+precision <- TP / (TP + FP)
+recall <- TP / (TP + FN)
+
+f1_score <- 2 * (precision * recall) /
+            (precision + recall)
+
+cat("Precision:", round(precision * 100, 2), "%\n")
+cat("Recall:", round(recall * 100, 2), "%\n")
+cat("F1-Score:", round(f1_score * 100, 2), "%\n")
+```
+Precision: Of all students predicted as placed, approximately 75.69% were actually placed.
+
+Recall: The model correctly identified approximately 83.29% of all actually placed students.
+
+F1-score: The F1-score of approximately 79.31% represents the balance between precision and recall.
+
+# Conclusion
+
+This mini project analysed the factors influencing graduate placement and salary outcomes across five countries using the Global Student Placement & Salary Dataset. The exploratory analysis revealed that factors such as CGPA, backlogs, internship experience, university ranking, country, and specialization are associated with placement and salary outcomes.
+
+A Logistic Regression model was developed to predict student placement status. The model achieved 73.6% accuracy, with a precision of 75.69%, recall of 83.29%, and F1-score of 79.31%.
+
+Overall, the project achieved its objectives by identifying important patterns in graduate placement and salary outcomes and developing a model to predict placement status. However, since the dataset is simulated, the findings should be interpreted as analytical insights rather than actual real-world placement statistics.
